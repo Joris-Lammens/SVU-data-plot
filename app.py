@@ -41,7 +41,12 @@ st.title("Run Data Plotter")
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
 if uploaded_file is not None:
+    if st.session_state.get("last_uploaded_file") != uploaded_file.name:
+        log_event(user_email, "uploaded_file", uploaded_file.name)
+        st.session_state["last_uploaded_file"] = uploaded_file.name
+
     df = pd.read_csv(uploaded_file)
+
 
     df["LocalTime"] = pd.to_datetime(df["LocalTime"])
     df["RelativeTime_s"] = (df["LocalTime"] - df["LocalTime"].min()).dt.total_seconds()
@@ -179,3 +184,12 @@ if uploaded_file is not None:
     st.dataframe(df.head())
 else:
     st.info("Upload a CSV file to create the plot.")
+
+if user_email == "joris.lammens@rheavita.com":
+    st.subheader("Usage log")
+
+    if Path(LOG_FILE).exists():
+        log_df = pd.read_csv(LOG_FILE)
+        st.dataframe(log_df)
+    else:
+        st.info("No usage logged yet.")
