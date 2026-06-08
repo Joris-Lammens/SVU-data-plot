@@ -7,6 +7,34 @@ from datetime import datetime
 from pathlib import Path
 
 st.set_page_config(page_title="Run Data Plotter", layout="wide")
+LOG_FILE = "usage_log.csv"
+
+ALLOWED_USERS = [
+    "joris.lammens@rheavita.com",
+    "Alain.segers@rheavita.com",
+    "Laurens.Leys@rheavita.com",
+    "pj.vanbockstal@rheavita.com",
+]
+
+st.sidebar.header("User")
+
+user_email = st.sidebar.selectbox(
+    "Select your email",
+    ALLOWED_USERS
+)
+
+def log_event(user, event, details=""):
+    log_row = pd.DataFrame([{
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "user": user,
+        "event": event,
+        "details": details
+    }])
+
+    if Path(LOG_FILE).exists():
+        log_row.to_csv(LOG_FILE, mode="a", header=False, index=False)
+    else:
+        log_row.to_csv(LOG_FILE, index=False)
 
 st.title("Run Data Plotter")
 
