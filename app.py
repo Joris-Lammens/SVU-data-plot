@@ -9,19 +9,34 @@ from pathlib import Path
 st.set_page_config(page_title="Run Data Plotter", layout="wide")
 LOG_FILE = "usage_log.csv"
 
-ALLOWED_USERS = [
-    "joris.lammens@rheavita.com",
-    "Alain.segers@rheavita.com",
-    "Laurens.Leys@rheavita.com",
-    "pj.vanbockstal@rheavita.com",
-]
+import hashlib
 
-st.sidebar.header("User")
+def hash_code(code):
+    return hashlib.sha256(code.encode()).hexdigest()
 
-user_email = st.sidebar.selectbox(
-    "Select your email",
-    ALLOWED_USERS
+
+st.sidebar.header("Access")
+
+access_code = st.sidebar.text_input(
+    "Enter your personal access code",
+    type="password"
 )
+
+if not access_code:
+    st.warning("Please enter your personal access code to use the app.")
+    st.stop()
+
+access_hash = hash_code(access_code)
+
+USER_ACCESS = dict(st.secrets["users"])
+
+if access_hash not in USER_ACCESS:
+    st.error("Invalid access code.")
+    st.stop()
+
+user_email = USER_ACCESS[access_hash]
+
+st.sidebar.success(f"Logged in as {user_email}")
 
 def log_event(user, event, details=""):
     log_row = pd.DataFrame([{
