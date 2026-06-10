@@ -6,7 +6,7 @@ from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 
-st.set_page_config(page_title="Run Data Plotter", layout="wide")
+st.set_page_config(page_title="RheaLyo™ Mono Freeze-Dryer data plotter", layout="wide")
 LOG_FILE = "usage_log.csv"
 
 import hashlib
@@ -51,9 +51,21 @@ def log_event(user, event, details=""):
     else:
         log_row.to_csv(LOG_FILE, index=False)
 
-st.title("Run Data Plotter")
+st.title("RheaLyo™ Mono Freeze-Dryer data plotter")
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+
+st.info(
+    """
+    **Disclaimer**
+
+    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
+    The software is provided "as is".
+
+    Please verify all results before using them for reporting, decision-making, validation,
+    or regulatory documentation.
+    """
+)
 
 if uploaded_file is not None:
     if st.session_state.get("last_uploaded_file") != uploaded_file.name:
