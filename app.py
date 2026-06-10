@@ -55,17 +55,6 @@ st.title("RheaLyo™ Mono Freeze-Dryer data plotter")
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
-st.info(
-    """
-    **Disclaimer**
-
-    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
-    The software is provided "as is".
-
-    Please verify all results before using them for reporting, decision-making, validation,
-    or regulatory documentation.
-    """
-)
 
 if uploaded_file is not None:
     if st.session_state.get("last_uploaded_file") != uploaded_file.name:
@@ -211,6 +200,19 @@ if uploaded_file is not None:
     st.dataframe(df.head())
 else:
     st.info("Upload a CSV file to create the plot.")
+
+st.info(
+    """
+    **Disclaimer**
+
+    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
+    The software is provided "as is".
+
+    Please verify all results before using them for reporting, decision-making, validation,
+    or regulatory documentation.
+    """
+)
+
 
 if user_email == "joris.lammens@rheavita.com":
     st.subheader("Usage log")
