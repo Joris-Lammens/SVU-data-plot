@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
+import smtplib
+from email.message import EmailMessage
+
 
 st.set_page_config(page_title="RheaLyo™ Mono Freeze-Dryer data plotter", layout="wide")
 LOG_FILE = "usage_log.csv"
@@ -51,9 +54,54 @@ def log_event(user, event, details=""):
     else:
         log_row.to_csv(LOG_FILE, index=False)
 
+def send_notify_email(user, event, details=""):
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"SVU Data Plotter usage: {event}"
+        msg["From"] = st.secrets["email"]["sender_email"]
+        msg["To"] = st.secrets["email"]["notify_to"]
+
+        body = f"""
+SVU Data Plotter usage notification
+
+Timestamp: {datetime.now().isoformat(timespec="seconds")}
+User: {user}
+Event: {event}
+Details: {details}
+"""
+
+        msg.set_content(body)
+
+        with smtplib.SMTP(
+            st.secrets["email"]["smtp_server"],
+            int(st.secrets["email"]["smtp_port"])
+        ) as server:
+            server.starttls()
+            server.login(
+                st.secrets["email"]["sender_email"],
+                st.secrets["email"]["sender_password"]
+            )
+            server.send_message(msg)
+
+    except Exception as e:
+        st.sidebar.warning(f"Email notification failed: {e}")
+
+if "opened_email_sent" not in st.session_state:
+    send_notify_email(user_email, "opened_app", "App session started")
+    st.session_state["opened_email_sent"] = True
+
 st.title("RheaLyo™ Mono Freeze-Dryer data plotter")
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+
+if uploaded_file is not None:
+    if st.session_state.get("last_uploaded_file") != uploaded_file.name:
+        send_notify_email(user_email, "uploaded_file", uploaded_file.name)
+        st.session_state["last_uploaded_file"] = uploaded_file.name
+
+    df = pd.read_csv(uploaded_file)
+
+    # rest of your existing plotting code
 
 
 if uploaded_file is not None:
@@ -189,12 +237,16 @@ if uploaded_file is not None:
     fig.savefig(image_buffer, format="png", dpi=300, bbox_inches="tight")
     image_buffer.seek(0)
 
-    st.download_button(
-        label="Download plot as PNG",
-        data=image_buffer,
-        file_name="run_plot.png",
-        mime="image/png"
-    )
+    def notify_download():
+    send_notify_email(user_email, "downloaded_plot", "run_plot.png")
+
+st.download_button(
+    label="Download plot as PNG",
+    data=image_buffer,
+    file_name="run_plot.png",
+    mime="image/png",
+    on_click=notify_download
+)
 
     st.subheader("Preview data")
     st.dataframe(df.head())
@@ -214,11 +266,3 @@ st.info(
 )
 
 
-if user_email == "joris.lammens@rheavita.com":
-    st.subheader("Usage log")
-
-    if Path(LOG_FILE).exists():
-        log_df = pd.read_csv(LOG_FILE)
-        st.dataframe(log_df)
-    else:
-        st.info("No usage logged yet.")
