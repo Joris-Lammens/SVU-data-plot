@@ -1,68 +1,32 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
 from datetime import datetime
-from pathlib import Path
 import smtplib
 from email.message import EmailMessage
-
-
-st.set_page_config(page_title="RheaLyo™ Mono Freeze-Dryer data plotter", layout="wide")
-LOG_FILE = "usage_log.csv"
-
 import hashlib
+
+
+st.set_page_config(
+    page_title="RheaLyo™ Mono Freeze-Dryer data plotter",
+    layout="wide"
+)
+
 
 def hash_code(code):
     return hashlib.sha256(code.encode()).hexdigest()
 
 
-st.sidebar.header("Access")
-
-access_code = st.sidebar.text_input(
-    "Enter your personal access code",
-    type="password"
-)
-
-if not access_code:
-    st.warning("Please enter your personal access code to use the app.")
-    st.stop()
-
-access_hash = hash_code(access_code)
-
-USER_ACCESS = dict(st.secrets["users"])
-
-if access_hash not in USER_ACCESS:
-    st.error("Invalid access code.")
-    st.stop()
-
-user_email = USER_ACCESS[access_hash]
-
-st.sidebar.success(f"Logged in as {user_email}")
-
-def log_event(user, event, details=""):
-    log_row = pd.DataFrame([{
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "user": user,
-        "event": event,
-        "details": details
-    }])
-
-    if Path(LOG_FILE).exists():
-        log_row.to_csv(LOG_FILE, mode="a", header=False, index=False)
-    else:
-        log_row.to_csv(LOG_FILE, index=False)
-
 def send_notify_email(user, event, details=""):
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"SVU Data Plotter usage: {event}"
+        msg["Subject"] = f"RheaLyo data plotter usage: {event}"
         msg["From"] = st.secrets["email"]["sender_email"]
         msg["To"] = st.secrets["email"]["notify_to"]
 
         body = f"""
-SVU Data Plotter usage notification
+RheaLyo™ Mono Freeze-Dryer data plotter usage notification
 
 Timestamp: {datetime.now().isoformat(timespec="seconds")}
 User: {user}
@@ -86,13 +50,55 @@ Details: {details}
     except Exception as e:
         st.sidebar.warning(f"Email notification failed: {e}")
 
+
+st.sidebar.header("Access")
+
+access_code = st.sidebar.text_input(
+    "Enter your personal access code",
+    type="password"
+)
+
+if not access_code:
+    st.warning("Please enter your personal access code to use the app.")
+    st.stop()
+
+access_hash = hash_code(access_code)
+
+USER_ACCESS = dict(st.secrets["users"])
+
+if access_hash not in USER_ACCESS:
+    send_notify_email(
+        "unknown",
+        "invalid_access_code",
+        "Someone entered an invalid access code"
+    )
+    st.error("Invalid access code.")
+    st.stop()
+
+user_email = USER_ACCESS[access_hash]
+
+st.sidebar.success(f"Logged in as {user_email}")
+
 if "opened_email_sent" not in st.session_state:
     send_notify_email(user_email, "opened_app", "App session started")
     st.session_state["opened_email_sent"] = True
 
+
 st.title("RheaLyo™ Mono Freeze-Dryer data plotter")
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+
+st.info(
+    """
+    **Disclaimer**
+
+    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
+    The software is provided "as is".
+
+    Please verify all results before using them for reporting, decision-making, validation,
+    or regulatory documentation.
+    """
+)
 
 if uploaded_file is not None:
     if st.session_state.get("last_uploaded_file") != uploaded_file.name:
@@ -101,19 +107,10 @@ if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file)
 
-    # rest of your existing plotting code
-
-
-if uploaded_file is not None:
-    if st.session_state.get("last_uploaded_file") != uploaded_file.name:
-        log_event(user_email, "uploaded_file", uploaded_file.name)
-        st.session_state["last_uploaded_file"] = uploaded_file.name
-
-    df = pd.read_csv(uploaded_file)
-
-
     df["LocalTime"] = pd.to_datetime(df["LocalTime"])
-    df["RelativeTime_s"] = (df["LocalTime"] - df["LocalTime"].min()).dt.total_seconds()
+    df["RelativeTime_s"] = (
+        df["LocalTime"] - df["LocalTime"].min()
+    ).dt.total_seconds()
     df["RelativeTime_min"] = df["RelativeTime_s"] / 60
 
     def get_signal(dataframe, name_part):
@@ -240,29 +237,16 @@ if uploaded_file is not None:
     def notify_download():
         send_notify_email(user_email, "downloaded_plot", "run_plot.png")
 
-st.download_button(
-    label="Download plot as PNG",
-    data=image_buffer,
-    file_name="run_plot.png",
-    mime="image/png",
-    on_click=notify_download
-)
+    st.download_button(
+        label="Download plot as PNG",
+        data=image_buffer,
+        file_name="run_plot.png",
+        mime="image/png",
+        on_click=notify_download
+    )
 
     st.subheader("Preview data")
     st.dataframe(df.head())
+
 else:
     st.info("Upload a CSV file to create the plot.")
-
-st.info(
-    """
-    **Disclaimer**
-
-    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
-    The software is provided "as is".
-
-    Please verify all results before using them for reporting, decision-making, validation,
-    or regulatory documentation.
-    """
-)
-
-
