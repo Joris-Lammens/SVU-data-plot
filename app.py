@@ -238,7 +238,7 @@ if uploaded_file is not None:
     image_buffer.seek(0)
 
     def notify_download():
-    send_notify_email(user_email, "downloaded_plot", "run_plot.png")
+        send_notify_email(user_email, "downloaded_plot", "run_plot.png")
 
 st.download_button(
     label="Download plot as PNG",
