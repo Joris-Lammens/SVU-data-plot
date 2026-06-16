@@ -14,11 +14,27 @@ st.set_page_config(
 )
 
 
+# -------------------------------------------------------------------
+# Helper functions
+# -------------------------------------------------------------------
+
 def hash_code(code):
     return hashlib.sha256(code.encode()).hexdigest()
 
 
 def send_notify_email(user, event, details=""):
+    """
+    Sends a usage notification email.
+
+    Requires Streamlit secrets:
+
+    [email]
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+    sender_email = "your_gmail_address@gmail.com"
+    sender_password = "your_gmail_app_password"
+    notify_to = "operations@rheavita.com"
+    """
     try:
         msg = EmailMessage()
         msg["Subject"] = f"RheaLyo data plotter usage: {event}"
@@ -50,6 +66,17 @@ Details: {details}
     except Exception as e:
         st.sidebar.warning(f"Email notification failed: {e}")
 
+
+def get_signal(dataframe, name_part):
+    return dataframe[
+        dataframe["DeviceDescription"]
+        .str.contains(name_part, case=False, na=False)
+    ].sort_values("RelativeTime_min")
+
+
+# -------------------------------------------------------------------
+# Access control
+# -------------------------------------------------------------------
 
 st.sidebar.header("Access")
 
@@ -84,6 +111,10 @@ if "opened_email_sent" not in st.session_state:
     st.session_state["opened_email_sent"] = True
 
 
+# -------------------------------------------------------------------
+# Main app
+# -------------------------------------------------------------------
+
 st.title("RheaLyo™ Mono Freeze-Dryer data plotter")
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
@@ -92,11 +123,13 @@ st.info(
     """
     **Disclaimer**
 
-    The developer makes no warranties and disclaims all liability for the accuracy, use, or consequences of data exported using the provided software. 
+    The developer makes no warranties and disclaims all liability for the accuracy, use,
+    or consequences of data exported using the provided software.
+
     The software is provided "as is".
 
-    Please verify all results before using them for reporting, decision-making, validation,
-    or regulatory documentation.
+    Please verify all results before using them for reporting, decision-making,
+    validation, or regulatory documentation.
     """
 )
 
@@ -107,17 +140,29 @@ if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file)
 
-    df["LocalTime"] = pd.to_datetime(df["LocalTime"])
+    required_columns = ["LocalTime", "DeviceDescription", "Value"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+
+    if missing_columns:
+        st.error(
+            "The uploaded CSV is missing required column(s): "
+            + ", ".join(missing_columns)
+        )
+        st.stop()
+
+    df["LocalTime"] = pd.to_datetime(df["LocalTime"], errors="coerce")
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+
+    df = df.dropna(subset=["LocalTime", "Value", "DeviceDescription"])
+
+    if df.empty:
+        st.error("No valid data found after parsing LocalTime and Value.")
+        st.stop()
+
     df["RelativeTime_s"] = (
         df["LocalTime"] - df["LocalTime"].min()
     ).dt.total_seconds()
     df["RelativeTime_min"] = df["RelativeTime_s"] / 60
-
-    def get_signal(dataframe, name_part):
-        return dataframe[
-            dataframe["DeviceDescription"]
-            .str.contains(name_part, case=False, na=False)
-        ].sort_values("RelativeTime_min")
 
     gas_temp = get_signal(df, "gas")
     vial_temp = get_signal(df, "vial")
@@ -158,7 +203,7 @@ if uploaded_file is not None:
 
     fig, ax_left = plt.subplots(figsize=(12, 6))
 
-    if show_gas:
+    if show_gas and not gas_temp.empty:
         ax_left.plot(
             gas_temp["RelativeTime_min"],
             gas_temp["Value"],
@@ -166,7 +211,7 @@ if uploaded_file is not None:
             linewidth=1.5
         )
 
-    if show_vial:
+    if show_vial and not vial_temp.empty:
         ax_left.plot(
             vial_temp["RelativeTime_min"],
             vial_temp["Value"],
@@ -182,7 +227,7 @@ if uploaded_file is not None:
 
     ax_right = ax_left.twinx()
 
-    if show_pirani:
+    if show_pirani and not pirani.empty:
         ax_right.plot(
             pirani["RelativeTime_min"],
             pirani["Value"],
@@ -192,7 +237,7 @@ if uploaded_file is not None:
             linestyle=":"
         )
 
-    if show_capacitance:
+    if show_capacitance and not capacitance.empty:
         ax_right.plot(
             capacitance["RelativeTime_min"],
             capacitance["Value"],
@@ -202,7 +247,7 @@ if uploaded_file is not None:
             linestyle=":"
         )
 
-    if show_heater:
+    if show_heater and not heater.empty:
         ax_right.plot(
             heater["RelativeTime_min"],
             heater["Value"],
@@ -218,13 +263,14 @@ if uploaded_file is not None:
     left_lines, left_labels = ax_left.get_legend_handles_labels()
     right_lines, right_labels = ax_right.get_legend_handles_labels()
 
-    ax_left.legend(
-        left_lines + right_lines,
-        left_labels + right_labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.12),
-        ncol=4
-    )
+    if left_lines or right_lines:
+        ax_left.legend(
+            left_lines + right_lines,
+            left_labels + right_labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.12),
+            ncol=4
+        )
 
     plt.tight_layout()
 
