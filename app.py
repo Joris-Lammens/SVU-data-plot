@@ -170,7 +170,7 @@ if uploaded_file is not None:
     capacitance = get_signal(df, "capacitance")
     heater = get_signal(df, "heater")
 
-    max_time = float(df["RelativeTime_min"].max())
+    max_time = 600.0
 
     st.sidebar.header("Plot settings")
 
