@@ -291,8 +291,21 @@ if uploaded_file is not None:
         on_click=notify_download
     )
 
-    st.subheader("Preview data")
-    st.dataframe(df.head())
+st.subheader("Preview data")
+
+preview_rows = st.slider(
+    "Number of preview rows",
+    min_value=5,
+    max_value=min(500, len(df)),
+    value=min(50, len(df)),
+    step=5
+)
+
+st.dataframe(
+    df.head(preview_rows),
+    height=600,
+    use_container_width=True
+)
 
 else:
     st.info("Upload a CSV file to create the plot.")
