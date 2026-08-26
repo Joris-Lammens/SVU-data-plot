@@ -293,7 +293,7 @@ if uploaded_file is not None:
 
     st.subheader("Preview data")
 
-    max_preview_rows = max(1, min(500, len(df)))
+    max_preview_rows = max(1, min(5500, len(df)))
 
     preview_rows = st.slider(
         "Number of preview rows",
