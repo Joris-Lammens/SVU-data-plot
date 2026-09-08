@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
-from datetime import datetime
-import smtplib
-from email.message import EmailMessage
 import hashlib
 
 
@@ -19,7 +16,15 @@ st.set_page_config(
 # -------------------------------------------------------------------
 
 def hash_code(code):
-    return hashlib.sha256(code.encode()).hexdigest()
+    return hashlib.sha256(code.strip().encode()).hexdigest()
+
+
+def get_signal(dataframe, name_part):
+    return dataframe[
+        dataframe["DeviceDescription"]
+        .str.contains(name_part, case=False, na=False)
+    ].sort_values("RelativeTime_min")
+
 
 # -------------------------------------------------------------------
 # Access control
@@ -36,26 +41,19 @@ if not access_code:
     st.warning("Please enter your personal access code to use the app.")
     st.stop()
 
+try:
+    user_access = dict(st.secrets["users"])
+except Exception:
+    st.error("Access configuration is missing. Please contact the app administrator.")
+    st.stop()
+
 access_hash = hash_code(access_code)
 
-USER_ACCESS = dict(st.secrets["users"])
-
-if access_hash not in USER_ACCESS:
-    send_notify_email(
-        "unknown",
-        "invalid_access_code",
-        "Someone entered an invalid access code"
-    )
+if access_hash not in user_access:
     st.error("Invalid access code.")
     st.stop()
 
-user_email = USER_ACCESS[access_hash]
-
-st.sidebar.success(f"Logged in as {user_email}")
-
-if "opened_email_sent" not in st.session_state:
-    send_notify_email(user_email, "opened_app", "App session started")
-    st.session_state["opened_email_sent"] = True
+st.sidebar.success("Access granted")
 
 
 # -------------------------------------------------------------------
@@ -81,10 +79,6 @@ st.info(
 )
 
 if uploaded_file is not None:
-    if st.session_state.get("last_uploaded_file") != uploaded_file.name:
-        send_notify_email(user_email, "uploaded_file", uploaded_file.name)
-        st.session_state["last_uploaded_file"] = uploaded_file.name
-
     df = pd.read_csv(uploaded_file)
 
     required_columns = ["LocalTime", "DeviceDescription", "Value"]
@@ -100,7 +94,7 @@ if uploaded_file is not None:
     df["LocalTime"] = pd.to_datetime(df["LocalTime"], errors="coerce")
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
 
-    df = df.dropna(subset=["LocalTime", "Value", "DeviceDescription"])
+    df = df.dropna(subset=["LocalTime", "DeviceDescription", "Value"])
 
     if df.empty:
         st.error("No valid data found after parsing LocalTime and Value.")
@@ -109,6 +103,7 @@ if uploaded_file is not None:
     df["RelativeTime_s"] = (
         df["LocalTime"] - df["LocalTime"].min()
     ).dt.total_seconds()
+
     df["RelativeTime_min"] = df["RelativeTime_s"] / 60
 
     gas_temp = get_signal(df, "gas")
@@ -117,7 +112,15 @@ if uploaded_file is not None:
     capacitance = get_signal(df, "capacitance")
     heater = get_signal(df, "heater")
 
-    max_time = 600.0
+    max_time = float(df["RelativeTime_min"].max())
+
+    if max_time <= 0:
+        st.error("The uploaded file does not contain a valid time range.")
+        st.stop()
+
+    # -------------------------------------------------------------------
+    # Sidebar plot settings
+    # -------------------------------------------------------------------
 
     st.sidebar.header("Plot settings")
 
@@ -147,6 +150,10 @@ if uploaded_file is not None:
     show_pirani = st.sidebar.checkbox("Pirani", value=True)
     show_capacitance = st.sidebar.checkbox("Capacitance", value=True)
     show_heater = st.sidebar.checkbox("Heater", value=True)
+
+    # -------------------------------------------------------------------
+    # Plot
+    # -------------------------------------------------------------------
 
     fig, ax_left = plt.subplots(figsize=(12, 6))
 
@@ -223,24 +230,28 @@ if uploaded_file is not None:
 
     st.pyplot(fig)
 
+    # -------------------------------------------------------------------
+    # Download plot
+    # -------------------------------------------------------------------
+
     image_buffer = BytesIO()
     fig.savefig(image_buffer, format="png", dpi=300, bbox_inches="tight")
     image_buffer.seek(0)
-
-    def notify_download():
-        send_notify_email(user_email, "downloaded_plot", "run_plot.png")
 
     st.download_button(
         label="Download plot as PNG",
         data=image_buffer,
         file_name="run_plot.png",
-        mime="image/png",
-        on_click=notify_download
+        mime="image/png"
     )
+
+    # -------------------------------------------------------------------
+    # Data preview
+    # -------------------------------------------------------------------
 
     st.subheader("Preview data")
 
-    max_preview_rows = max(1, min(55500, len(df)))
+    max_preview_rows = max(1, min(500, len(df)))
 
     preview_rows = st.slider(
         "Number of preview rows",
