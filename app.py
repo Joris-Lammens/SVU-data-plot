@@ -21,59 +21,6 @@ st.set_page_config(
 def hash_code(code):
     return hashlib.sha256(code.encode()).hexdigest()
 
-
-def send_notify_email(user, event, details=""):
-    """
-    Sends a usage notification email.
-
-    Requires Streamlit secrets:
-
-    [email]
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-    sender_email = "your_gmail_address@gmail.com"
-    sender_password = "your_gmail_app_password"
-    notify_to = "operations@rheavita.com"
-    """
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = f"RheaLyo data plotter usage: {event}"
-        msg["From"] = st.secrets["email"]["sender_email"]
-        msg["To"] = st.secrets["email"]["notify_to"]
-
-        body = f"""
-RheaLyo™ Mono Freeze-Dryer data plotter usage notification
-
-Timestamp: {datetime.now().isoformat(timespec="seconds")}
-User: {user}
-Event: {event}
-Details: {details}
-"""
-
-        msg.set_content(body)
-
-        with smtplib.SMTP(
-            st.secrets["email"]["smtp_server"],
-            int(st.secrets["email"]["smtp_port"])
-        ) as server:
-            server.starttls()
-            server.login(
-                st.secrets["email"]["sender_email"],
-                st.secrets["email"]["sender_password"]
-            )
-            server.send_message(msg)
-
-    except Exception as e:
-        st.sidebar.warning(f"Email notification failed: {e}")
-
-
-def get_signal(dataframe, name_part):
-    return dataframe[
-        dataframe["DeviceDescription"]
-        .str.contains(name_part, case=False, na=False)
-    ].sort_values("RelativeTime_min")
-
-
 # -------------------------------------------------------------------
 # Access control
 # -------------------------------------------------------------------
